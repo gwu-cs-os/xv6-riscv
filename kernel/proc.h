@@ -108,6 +108,18 @@ struct proc {
 	uint64            sz;            // Size of process memory (bytes)
 	pagetable_t       pagetable;     // User page table
 	struct trapframe *trapframe;     // data page for trampoline.S
+	// GWU updates: Each protection domain (page-table) has a
+	// single trapframe for its initial thread mapped into it. If
+	// we want multiple threads, then all threads need to be
+	// taught to *share* the trapframe of the thread that owns
+	// (created) the address space. See the corresponding
+	// functions to update these structures: `trapframe_update_*`
+
+	// saved trapframe data if trapframe != pd_trapframe
+	struct trapframe  saved_trapframe;
+	// the trapframe belonging to the process that owns the
+	// process/protection domain (or PD).
+	struct trapframe *pd_trapframe;
 	struct context    context;       // swtch() here to run process
 	struct file      *ofile[NOFILE]; // Open files
 	struct inode     *cwd;           // Current directory
