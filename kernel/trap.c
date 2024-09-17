@@ -11,6 +11,67 @@ uint            ticks;
 
 extern char trampoline[], uservec[], userret[];
 
+// Before we switch to user-level, we need to install our trapframe
+// into the trapframe of the process whose page-table we use, and also
+// save the trap frame of the process that owns the page-table. Of
+// course, if we use our own page-table (as a normal process), then
+// this doesn't make any actual changes.
+//
+// This assumes that we're going to switch to the page-table within
+// the current process' `p->pagetable_proc`.
+void
+trapframe_update_save(void)
+{
+	struct proc *p = myproc();
+	struct proc *pt = p->pagetable_proc;
+	struct cpu  *c = mycpu();
+
+        // If we're going to switch to user-level using a trapframe of
+        // another process that owns our page-table, We have to save
+        // its trapframe as we're going to "borrow it" for some
+        // execution. K thx bye!
+	if (p != pt) {
+		// If we are not the page-table owning process, make sure to
+		// save its previous trapframe contents to later be restored.
+		c->saved_pagetable_proc_tf = *pt->trapframe;
+                // save this, so we can later consistency check it
+		c->pagetable_proc = pt;
+		// Save our trap-frame's information into the one for the
+		// active page-table process
+		*pt->trapframe = *p->trapframe;
+	}
+}
+
+// We want to save the trapframe information for the current process.
+// However, if we are currently executing (i.e. if `myproc` is) a
+// process that is using *another's* page-table, then we need to both
+// save our own trapframe (from the page-table process' trapframe),
+// and restore the page-table process' trapframe.
+void
+trapframe_update_reset(void)
+{
+	struct proc *p = myproc();
+	struct proc *pt = p->pagetable_proc;
+	struct cpu  *c = mycpu();
+
+        // If we're current executing a process that doesn't match the
+        // process with the active page-table, we have to
+        if (p != pt) {
+		if (c->pagetable_proc != pt) {
+			panic("Upon return from user-level, we found that the owner of the page-table and trap frame, does not match that which was saved.");
+		}
+		// copy the trapframe's information into the process
+		// it actually belongs to -- the current process
+		// making a transition into the kernel!
+		*p->trapframe = *pt->trapframe;
+		// Restore the trapframe for the process that owns the
+		// page-table.
+		*pt->trapframe = c->saved_pagetable_proc_tf;
+		c->saved_pagetable_proc_tf = (struct trapframe) { 0 };
+		c->pagetable_proc = 0;
+	}
+}
+
 // in kernelvec.S, calls kerneltrap().
 void kernelvec();
 
@@ -45,6 +106,13 @@ usertrap(void)
 	w_stvec((uint64)kernelvec);
 
 	struct proc *p = myproc();
+
+        // make sure that the process' trapframe information is
+        // available for use, and that we restore the
+        // page-table-owning process' trapframe.
+        //
+        // The p->trapframe shouldn't be accessed before this.
+        trapframe_update_reset();
 
 	// save user program counter.
 	p->trapframe->epc = r_sepc();
@@ -115,6 +183,12 @@ usertrapret(void)
 	// set S Exception Program Counter to the saved user pc.
 	w_sepc(p->trapframe->epc);
 
+        // Make sure that the our process' data is present in the
+        // trapframe of the process that owns the page table (in the
+        // case of multiple threads). Note that more changes are
+        // necessary in this function (and elsewhere) to support
+        // processes (threads) that share a page-table.
+        trapframe_update_save();
 	// tell trampoline.S the user page table to switch to.
 	uint64 satp = MAKE_SATP(p->pagetable);
 
