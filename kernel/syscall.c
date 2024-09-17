@@ -28,6 +28,29 @@ fetchstr(uint64 addr, char *buf, int max)
 	return strlen(buf);
 }
 
+// Copy a structure from user-level (i.e. that was passed as an argument to a system call) to the kernel into a
+// structure.
+int
+fetchstruct(uint64 addr, void *structure, int size)
+{
+	struct proc *p = myproc();
+	if (addr >= p->sz || addr + size > p->sz) // both tests needed, in case of overflow
+		return -1;
+	if (copyin(p->pagetable, (char *)structure, addr, size) != 0) return -1;
+	return 0;
+}
+
+// Copy a structure from the kernel to user-level (i.e. that will be returned as the result of a system call).
+int
+putstruct(uint64 addr, void *structure, int size)
+{
+	struct proc *p = myproc();
+	if (addr >= p->sz || addr + size > p->sz) // both tests needed, in case of overflow
+		return -1;
+	if (copyout(p->pagetable, addr, (char *)structure, size) != 0) return -1;
+	return 0;
+}
+
 static uint64
 argraw(int n)
 {
