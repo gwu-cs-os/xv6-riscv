@@ -140,6 +140,8 @@ void argaddr(int, uint64 *);
 int  fetchstr(uint64, char *, int);
 int  fetchaddr(uint64, uint64 *);
 void syscall();
+int  fetchstruct(uint64, void *, int);
+int  putstruct(uint64, void *, int);
 
 // trap.c
 extern uint            ticks;

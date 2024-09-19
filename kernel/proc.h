@@ -18,16 +18,6 @@ struct context {
 	uint64 s11;
 };
 
-// Per-CPU state.
-struct cpu {
-	struct proc   *proc;    // The process running on this cpu, or null.
-	struct context context; // swtch() here to enter scheduler().
-	int            noff;    // Depth of push_off() nesting.
-	int            intena;  // Were interrupts enabled before push_off()?
-};
-
-extern struct cpu cpus[NCPU];
-
 // per-process data for the trap handling code in trampoline.S.
 // sits in a page by itself just under the trampoline page in the
 // user page table. not specially mapped in the kernel page table.
@@ -79,6 +69,25 @@ struct trapframe {
 	/* 280 */ uint64 t6;
 };
 
+// Per-CPU state.
+struct cpu {
+	struct proc   *proc;    // The process running on this cpu, or null.
+	struct context context; // swtch() here to enter scheduler().
+	int            noff;    // Depth of push_off() nesting.
+	int            intena;  // Were interrupts enabled before push_off()?
+
+	// If a thread (proc) uses another's page-tables, when it
+	// switches to user-level it has to use the trapframe of the
+	// page-table's process. Thus, we must save it and restore it
+	// on exit from the kernel, and entry back into the kernel.
+	// This is where we save it! These are updated by the
+	// trapframe_update_* functions.
+	struct proc *pagetable_proc;
+	struct trapframe saved_pagetable_proc_tf;
+};
+
+extern struct cpu cpus[NCPU];
+
 enum procstate
 {
 	UNUSED,
@@ -108,6 +117,17 @@ struct proc {
 	uint64            sz;            // Size of process memory (bytes)
 	pagetable_t       pagetable;     // User page table
 	struct trapframe *trapframe;     // data page for trampoline.S
+	// GWU updates: Each protection domain (page-table) has a
+	// single trapframe for its initial thread mapped into it. If
+	// we want multiple threads, then all threads need to be
+	// taught to *share* the trapframe of the thread that owns
+	// (created) the address space. See the corresponding
+	// functions to update these structures: `trapframe_update_*`
+	//
+	// The process that owns the page-table/protection domain that
+	// this process actually uses (i.e. if this process is
+	// actually a thread that shares that protection domain..
+	struct proc      *pagetable_proc;
 	struct context    context;       // swtch() here to run process
 	struct file      *ofile[NOFILE]; // Open files
 	struct inode     *cwd;           // Current directory
