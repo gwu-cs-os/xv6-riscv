@@ -185,9 +185,9 @@ usertrapret(void)
 
         // Make sure that the our process' data is present in the
         // trapframe of the process that owns the page table (in the
-        // case of multiple threads). Note that more changes are
-        // necessary in this function (and elsewhere) to support
-        // processes (threads) that share a page-table.
+        // case of multiple threads). Don't forget that you have to
+        // setup the ->pagetable_proc within the process to properly
+        // point to the proc that owns the address space.
         trapframe_update_save();
 	// tell trampoline.S the user page table to switch to.
 	uint64 satp = MAKE_SATP(p->pagetable);
