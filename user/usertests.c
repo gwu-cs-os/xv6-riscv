@@ -2971,6 +2971,7 @@ run(void f(char *), char *s)
 			printf("OK\n");
 		return xstatus == 0;
 	}
+	while (1);
 }
 
 int
