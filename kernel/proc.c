@@ -370,6 +370,8 @@ exit(int status)
 	// Jump into the scheduler, never to return.
 	sched();
 	panic("zombie exit");
+
+	return;
 }
 
 // Wait for a child process to exit and return its pid.
